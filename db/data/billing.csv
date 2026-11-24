@@ -1,0 +1,10 @@
+line_id,partner_id,direction,unit_type,units,unit_price,amount,period_start,period_end
+INV001,P1,payable,accepted_lead,774,35,27090,2026-10-05,2026-10-11
+INV002,P2,payable,accepted_lead,601,35,21035,2026-10-05,2026-10-11
+INV003,P3,payable,accepted_lead,560,35,19600,2026-10-05,2026-10-11
+INV004,P1,payable,billable_call,116,60,6960,2026-10-05,2026-10-11
+INV005,P2,payable,billable_call,177,60,10620,2026-10-05,2026-10-11
+INV006,P3,payable,billable_call,146,60,8760,2026-10-05,2026-10-11
+INV007,B1,receivable,signed_case,40,3000,120000,2026-10-05,2026-10-11
+INV008,B2,receivable,signed_case,22,3000,66000,2026-10-05,2026-10-11
+INV009,B3,receivable,signed_case,18,3000,54000,2026-10-05,2026-10-11

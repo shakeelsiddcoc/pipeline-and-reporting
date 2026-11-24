@@ -1,0 +1,29 @@
+<% content_for :title, "Pipeline Health Alerts" %>
+<div class="page-head">
+  <div>
+    <h1>Health alerts</h1>
+    <p class="lede">The week replayed on a 15-minute clock. Each row is one incident: repeats of the same problem merge into it,
+      and it resolves after an hour with no new findings. Regenerate with <code>bin/rails monitor:run</code>.</p>
+  </div>
+</div>
+
+<% if @alerts.empty? %>
+  <div class="card empty">No alerts yet. Run <code>bin/rails db:setup</code> and <code>bin/rails monitor:run</code>.</div>
+<% else %>
+  <div class="kpis">
+    <div class="kpi"><span class="kpi-label">Incidents</span><span class="kpi-value"><%= @alerts.size %></span>
+      <span class="kpi-meta"><%= @alerts.count { |a| a.resolved_at.nil? } %> open at end of data</span></div>
+    <% Alert::SEVERITIES.reverse_each do |s| %>
+      <div class="kpi"><span class="kpi-label"><%= severity_badge(s) %></span>
+        <span class="kpi-value"><%= @alerts.count { |a| a.severity == s } %></span>
+        <span class="kpi-meta"><%= number_with_delimiter(@alerts.select { |a| a.severity == s }.sum(&:affected_count)) %> leads or calls affected</span></div>
+    <% end %>
+  </div>
+
+  <%= card "Affected leads and calls by incident", "Size of each incident at the end of the replay; the label shows when it was detected", css: "mb" do %>
+    <%= hbar_list(@alerts.sort_by { |a| -a.affected_count }.map { |a|
+          { label: "#{a.partner_id} #{a.check_name.humanize.downcase}", value: a.affected_count, note: "detected #{a.detected_at.strftime('%a %H:%M')}" } }) %>
+  <% end %>
+
+  <div class="card table-card"><%= render "shared/incidents", alerts: @alerts, detail: true %></div>
+<% end %>

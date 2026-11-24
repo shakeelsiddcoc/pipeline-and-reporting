@@ -1,0 +1,15 @@
+# Bundler
+/.bundle
+
+# Secrets: never commit the master key
+/config/master.key
+/config/credentials/*.key
+.env*
+
+# Local databases (rebuilt by `bin/rails db:setup`), logs, temp files
+/storage/*
+!/storage/.keep
+/log/*
+!/log/.keep
+/tmp/*
+!/tmp/.keep

@@ -1,0 +1,10 @@
+line_id,partner_id,direction,unit_type,billed_units,supported_units,diff_units,unit_price,billed_amount,supported_amount,dollar_impact,decision,reason
+INV001,P1,payable,accepted_lead,774,698,76,35,27090,24430,2660,dispute,"publisher over-billed: billed every received lead, rejected ones included (76 over, $2,660)"
+INV002,P2,payable,accepted_lead,601,601,0,35,21035,21035,0,approve,matches the data
+INV003,P3,payable,accepted_lead,560,560,0,35,19600,19600,0,approve,matches the data
+INV004,P1,payable,billable_call,116,116,0,60,6960,6960,0,approve,matches the data
+INV005,P2,payable,billable_call,177,144,33,60,10620,8640,1980,dispute,"publisher over-billed: billed calls of 60 s or more; billable is 90 s or more (33 over, $1,980)"
+INV006,P3,payable,billable_call,146,146,0,60,8760,8760,0,hold,"units match, but 8 billable calls went to the wrong buyer (bad state tag); approve 138, hold $480 pending a policy decision"
+INV007,B1,receivable,signed_case,40,37,3,3000,120000,111000,9000,hold,"our invoice is wrong, correct before sending: 1 delivered after the period end, 2 not found in the data at all (3 over, $9,000)"
+INV008,B2,receivable,signed_case,22,16,6,3000,66000,48000,18000,hold,"our invoice is wrong, correct before sending: counted every delivery event: duplicate deliveries of one lead, and deliveries after the period end (6 over, $18,000)"
+INV009,B3,receivable,signed_case,18,17,1,3000,54000,51000,3000,hold,"our invoice is wrong, correct before sending: includes cases delivered after the period end (belong on next period's invoice) (1 over, $3,000)"

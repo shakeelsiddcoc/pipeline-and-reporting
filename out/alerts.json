@@ -1,0 +1,104 @@
+[
+  {
+    "detected_at": "2026-10-05 16:30",
+    "check_name": "misrouting",
+    "severity": "medium",
+    "partner_id": "P3",
+    "affected_count": 25,
+    "sample_ids": [
+      "C00105",
+      "C00118",
+      "C00228",
+      "C00254",
+      "C00236"
+    ],
+    "last_new_at": "2026-10-11 17:45",
+    "resolved_at": null,
+    "detail": "25 calls tagged with the wrong state and sent to the wrong buyer"
+  },
+  {
+    "detected_at": "2026-10-07 10:45",
+    "check_name": "acceptance_drop",
+    "severity": "high",
+    "partner_id": "P3",
+    "affected_count": 49,
+    "sample_ids": [
+      "L000875",
+      "L000861",
+      "L000883",
+      "L000911",
+      "L000869"
+    ],
+    "last_new_at": "2026-10-07 22:45",
+    "resolved_at": "2026-10-08 00:15",
+    "detail": "acceptance 33% over last 21 (normal 81%, z=5.6); top reject reason missing_consent (14)"
+  },
+  {
+    "detected_at": "2026-10-08 14:15",
+    "check_name": "stall",
+    "severity": "critical",
+    "partner_id": "P2",
+    "affected_count": 23,
+    "sample_ids": [
+      "L001079",
+      "L001094",
+      "L001119",
+      "L001044",
+      "L001120"
+    ],
+    "last_new_at": "2026-10-08 17:30",
+    "resolved_at": null,
+    "detail": "23 leads verified > 5 minutes ago with no routed event"
+  },
+  {
+    "detected_at": "2026-10-09 02:15",
+    "check_name": "duplicate_delivery",
+    "severity": "critical",
+    "partner_id": "B2",
+    "affected_count": 5,
+    "sample_ids": [
+      "L000979",
+      "L000999",
+      "L001499",
+      "L001305",
+      "L001243"
+    ],
+    "last_new_at": "2026-10-09 20:45",
+    "resolved_at": null,
+    "detail": "5 leads delivered more than once (5 extra deliveries, $15000 at risk)"
+  },
+  {
+    "detected_at": "2026-10-10 08:15",
+    "check_name": "broken_sequence",
+    "severity": "high",
+    "partner_id": "I1",
+    "affected_count": 18,
+    "sample_ids": [
+      "L001643",
+      "L001789",
+      "L001569",
+      "L001560",
+      "L001729"
+    ],
+    "last_new_at": "2026-10-12 00:45",
+    "resolved_at": null,
+    "detail": "18 leads skipped the qualified stage"
+  },
+  {
+    "detected_at": "2026-10-10 16:45",
+    "check_name": "conversion_drop",
+    "severity": "high",
+    "partner_id": "I1",
+    "affected_count": 30,
+    "sample_ids": [
+      "L001695",
+      "L001609",
+      "L001748",
+      "L001778",
+      "L001555"
+    ],
+    "last_new_at": "2026-10-10 19:15",
+    "resolved_at": "2026-10-10 20:45",
+    "detail": "contacted -> qualified+ conversion 9% over last 33 (normal 35%, z=3.1)"
+  }
+]

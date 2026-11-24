@@ -1,0 +1,66 @@
+<% content_for :title, "Billing Reconciliation" %>
+<% money = ->(v) { number_to_currency(v, precision: 0) } %>
+<div class="page-head">
+  <div>
+    <h1>Billing reconciliation</h1>
+    <p class="lede">Each line of <code>billing.csv</code> compared with what the data supports for the same partner and period.
+      Impact = (billed − supported) × unit price; positive means billed above the data. CSV: <code>bin/rails billing:reconcile</code></p>
+  </div>
+</div>
+
+<% if @rows.empty? %>
+  <div class="card empty">No billing data. Run <code>bin/rails db:setup</code>.</div>
+<% else %>
+  <div class="kpis">
+    <div class="kpi hero"><span class="kpi-label">Billed above what the data supports</span>
+      <span class="kpi-value"><%= money.(@rows.sum { |r| r["dollar_impact"] }) %></span>
+      <span class="kpi-meta">across <%= @rows.count { |r| r["dollar_impact"].nonzero? } %> of <%= @rows.size %> invoice lines</span></div>
+    <% %w[approve dispute hold].each do |d| %>
+      <% rs = @rows.select { |r| r["decision"] == d } %>
+      <div class="kpi"><span class="kpi-label"><%= decision_badge(d) %></span>
+        <span class="kpi-value"><%= rs.size %></span>
+        <span class="kpi-meta"><%= money.(rs.sum { |r| r["billed_amount"] }) %> billed</span></div>
+    <% end %>
+  </div>
+
+  <div class="grid-2 mb">
+    <%= card "Dollar impact by invoice line", "Billed minus supported, × unit price" do %>
+      <%= hbar_list(@rows.sort_by { |r| -r["dollar_impact"] }.map { |r|
+            { label: "#{r['line_id']} #{r['partner_id']}", value: r["dollar_impact"], note: r["decision"].humanize } }, format: :usd) %>
+    <% end %>
+    <%= card "Payables vs receivables", "What we owe publishers and what we bill buyers, as billed and as the data supports" do %>
+      <% %w[payable receivable].each do |dir| %>
+        <% rs = @rows.select { |r| r["direction"] == dir } %>
+        <h4 class="sub" style="margin:4px 0 8px"><%= dir == "payable" ? "We pay publishers" : "Buyers pay us" %></h4>
+        <%= hbar_list([{ label: "Billed", value: rs.sum { |r| r["billed_amount"] } },
+                       { label: "Supported", value: rs.sum { |r| r["supported_amount"] } }], format: :usd) %>
+        <div style="height:12px"></div>
+      <% end %>
+    <% end %>
+  </div>
+
+  <div class="card table-card"><div class="wrap">
+    <table>
+      <thead><tr>
+        <th>Line</th><th>Partner</th><th>Unit</th><th class="num">Billed</th><th class="num">Supported</th>
+        <th class="num">Diff</th><th class="num">Billed $</th><th class="num">Impact $</th><th>Decision</th><th>Reason</th>
+      </tr></thead>
+      <tbody>
+        <% @rows.each do |r| %>
+          <tr>
+            <td><%= r["line_id"] %></td>
+            <td><%= r["partner_id"] %> <span class="muted"><%= @partners[r["partner_id"]] %></span><small style="display:block"><%= r["direction"] %></small></td>
+            <td><%= r["unit_type"].humanize %><small style="display:block"><%= money.(r["unit_price"]) %> each</small></td>
+            <td class="num"><%= number_with_delimiter(r["billed_units"]) %></td>
+            <td class="num"><%= number_with_delimiter(r["supported_units"]) %></td>
+            <td class="num"><%= format("%+d", r["diff_units"]) %></td>
+            <td class="num"><%= money.(r["billed_amount"]) %></td>
+            <td class="num"><%= money.(r["dollar_impact"]) %></td>
+            <td><%= decision_badge(r["decision"]) %></td>
+            <td><%= r["reason"] %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div></div>
+<% end %>

@@ -1,0 +1,100 @@
+<% content_for :title, "Daily Funnel Report" %>
+<%
+  fmt = lambda do |col, v|
+    next "—" if v.nil?
+    next number_to_percentage(v * 100, precision: 1) if col.end_with?("_rate")
+    next number_to_currency(v, precision: 0) if %w[receivable payable].include?(col)
+    number_with_delimiter(v)
+  end
+  stages = PipelineRules::STAGES
+  total = ->(sections, name) { sections[name]&.find { |r| r["partner_id"] == "ALL" } || {} }
+%>
+<div class="page-head">
+  <div>
+    <h1>Daily report<% if @day %> · <%= Date.parse(@day).strftime("%A, %b %-d") %><% end %></h1>
+    <p class="lede">Leads and the funnel are grouped by the day the lead was received; deliveries and calls by the day they happened.
+      CSV: <code>bin/rails report:funnel</code> · SQL: <code>app/queries/funnel/*.sql</code></p>
+  </div>
+</div>
+
+<div class="tabs" style="margin-bottom:20px">
+  <% @days.each do |d| %>
+    <%= link_to Date.parse(d).strftime("%a %b %-d"), report_path(d), "aria-current": (d == @day ? "page" : nil) %>
+  <% end %>
+</div>
+
+<% if @day.nil? %>
+  <div class="card empty">No data loaded. Run <code>bin/rails db:setup</code>.</div>
+<% else %>
+  <% vs = @prev_day ? Date.parse(@prev_day).strftime("%a") : "previous day"
+     l, pl = total.(@sections, "leads"), total.(@prev, "leads")
+     d, pd = total.(@sections, "deliveries"), total.(@prev, "deliveries")
+     c, pc = total.(@sections, "calls"), total.(@prev, "calls")
+     prev_or_nil = ->(h, k) { @prev_day ? h[k].to_i : nil } %>
+  <div class="kpis">
+    <div class="kpi"><span class="kpi-label">Leads received</span><span class="kpi-value"><%= number_with_delimiter(l["received"].to_i) %></span>
+      <%= kpi_delta(l["received"].to_i, prev_or_nil.(pl, "received"), vs: vs) %></div>
+    <div class="kpi"><span class="kpi-label">Acceptance rate</span><span class="kpi-value"><%= fmt.("acceptance_rate", l["acceptance_rate"]) %></span>
+      <%= kpi_delta(l["acceptance_rate"], (@prev_day ? pl["acceptance_rate"] : nil), vs: vs, format: :pct) %></div>
+    <div class="kpi"><span class="kpi-label">Cases delivered</span><span class="kpi-value"><%= d["cases_delivered"].to_i %></span>
+      <%= kpi_delta(d["cases_delivered"].to_i, prev_or_nil.(pd, "cases_delivered"), vs: vs) %></div>
+    <div class="kpi"><span class="kpi-label">Billable calls</span><span class="kpi-value"><%= c["billable"].to_i %></span>
+      <%= kpi_delta(c["billable"].to_i, prev_or_nil.(pc, "billable"), vs: vs) %></div>
+    <div class="kpi"><span class="kpi-label">Duplicate deliveries</span><span class="kpi-value"><%= d["duplicate_deliveries"].to_i %></span>
+      <%= kpi_delta(d["duplicate_deliveries"].to_i, prev_or_nil.(pd, "duplicate_deliveries"), vs: vs, up_is_good: false) %></div>
+    <div class="kpi"><span class="kpi-label">Alerts active</span><span class="kpi-value"><%= @alerts.size %></span>
+      <span class="kpi-meta"><%= @alerts.count { |a| a.detected_at.to_date.to_s == @day } %> new today</span></div>
+  </div>
+
+  <div class="grid-2">
+    <%= card "Funnel for leads received today", "All publishers; conversion from the previous stage. Recent days are still maturing (retainer → signed can take 10 h)." do %>
+      <% f = @sections["stages"].find { |r| r["partner_type"] == "all" } %>
+      <% if f %>
+        <%= hbar_list((["accepted"] + stages).each_cons(2).map { |prev, s| { label: s.humanize, value: f[s], note: "#{fmt.('_rate', f["#{prev}_to_#{s}"])} of previous" } }
+              .unshift({ label: "Accepted", value: f["accepted"] })) %>
+      <% else %><p class="muted">No accepted leads this day.</p><% end %>
+    <% end %>
+    <%= card "Alerts active this day", "Incidents open at any point during the day" do %>
+      <% if @alerts.empty? %><p class="muted">None.</p>
+      <% else %>
+        <ul class="story">
+          <% @alerts.each do |a| %>
+            <li><%= severity_badge(a.severity) %> <%= a.partner_id %> · <%= a.check_name.humanize.downcase %> · <%= a.affected_count %> affected<%= a.detected_at.to_date.to_s == @day ? " · new #{a.detected_at.strftime('%H:%M')}" : "" %><br><span class="muted"><%= a.detail %></span></li>
+          <% end %>
+        </ul>
+      <% end %>
+    <% end %>
+  </div>
+
+  <h2><%= FunnelReport::SECTIONS["leads"] %></h2>
+  <%= render "table", rows: @sections["leads"], label: "Publisher", fmt: fmt,
+             cols: %w[received accepted rejected rejected_missing_consent rejected_invalid_phone rejected_dnc_match acceptance_rate] %>
+
+  <h2><%= FunnelReport::SECTIONS["stages"] %></h2>
+  <% if @sections["stages"].empty? %>
+    <div class="card empty">No data for this day.</div>
+  <% else %>
+    <div class="card table-card"><div class="wrap"><table>
+      <thead><tr><th>Partner</th><th class="num">Accepted</th><% stages.each do |s| %><th class="num"><%= s.humanize %></th><% end %></tr></thead>
+      <tbody>
+        <% @sections["stages"].each do |r| %>
+          <tr class="<%= 'total' if r['partner_id'] == 'ALL' %>">
+            <td><%= r["partner_id"] == "ALL" ? "All" : r["partner_id"] %>
+              <small style="display:block"><%= r["partner_type"] == "all" ? "total" : "#{r['partner_type'].humanize.downcase} · #{@partners[r['partner_id']]}" %></small></td>
+            <td class="num"><%= r["accepted"] %></td>
+            <% (["accepted"] + stages).each_cons(2) do |prev, s| %>
+              <td class="num"><%= r[s] %><small style="display:block"><%= fmt.("_rate", r["#{prev}_to_#{s}"]) %></small></td>
+            <% end %>
+          </tr>
+        <% end %>
+      </tbody>
+    </table></div></div>
+  <% end %>
+
+  <h2><%= FunnelReport::SECTIONS["deliveries"] %></h2>
+  <%= render "table", rows: @sections["deliveries"], label: "Buyer", fmt: fmt, cols: %w[cases_delivered duplicate_deliveries receivable] %>
+
+  <h2><%= FunnelReport::SECTIONS["calls"] %></h2>
+  <%= render "table", rows: @sections["calls"], label: "Publisher", fmt: fmt,
+             cols: %w[received connected billable connect_rate billable_rate payable] %>
+<% end %>

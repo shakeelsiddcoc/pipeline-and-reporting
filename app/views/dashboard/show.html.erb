@@ -1,0 +1,120 @@
+<% content_for :title, "Pipeline Overview" %>
+<% if @days.empty? %>
+  <div class="card empty">No data loaded. Run <code>bin/rails db:setup</code> and <code>bin/rails monitor:run</code>.</div>
+<% else %>
+<%
+  received = @received_daily.sum
+  acceptance = @accepted_daily.sum.fdiv(received)
+  cases = @cases_daily.sum
+  billable = @billable_daily.sum
+  open_alerts = @alerts.count { |a| a.resolved_at.nil? }
+  variance = @billing.sum { |r| r["dollar_impact"] }
+  flagged = @billing.reject { |r| r["decision"] == "approve" }
+  acc_series = series(@publishers, @leads, "acceptance_rate")
+%>
+<div class="page-head">
+  <div>
+    <h1>Pipeline overview</h1>
+    <p class="lede">Leads, cases, calls and billing for the week, with the problems the monitor caught.
+      Daily detail is in <%= link_to "Daily report", report_path %>.</p>
+  </div>
+</div>
+
+<div class="kpis">
+  <div class="kpi hero">
+    <span class="kpi-label">Signed cases delivered</span>
+    <span class="kpi-value"><%= number_to_currency(cases * PipelineRules::CASE_PRICE, precision: 0) %></span>
+    <span class="kpi-meta"><%= cases %> cases × <%= number_to_currency(PipelineRules::CASE_PRICE, precision: 0) %>, each lead counted once
+      <% if @cases_after_week.positive? %>· <%= @cases_after_week %> more delivered after the week<% end %></span>
+    <%= sparkline(@cases_daily) %>
+  </div>
+  <div class="kpi">
+    <span class="kpi-label">Leads received</span>
+    <span class="kpi-value"><%= number_with_delimiter(received) %></span>
+    <span class="kpi-meta"><%= number_with_delimiter(@accepted_daily.sum) %> accepted</span>
+    <%= sparkline(@received_daily) %>
+  </div>
+  <div class="kpi">
+    <span class="kpi-label">Acceptance rate</span>
+    <span class="kpi-value"><%= number_to_percentage(acceptance * 100, precision: 1) %></span>
+    <span class="kpi-meta">daily low <%= number_to_percentage(@accepted_daily.zip(@received_daily).map { |a, r| a.fdiv(r) }.min * 100, precision: 0) %></span>
+    <%= sparkline(@accepted_daily.zip(@received_daily).map { |a, r| a.fdiv(r) }) %>
+  </div>
+  <div class="kpi">
+    <span class="kpi-label">Billable calls</span>
+    <span class="kpi-value"><%= number_with_delimiter(billable) %></span>
+    <span class="kpi-meta"><%= number_to_currency(billable * PipelineRules::CALL_PRICE, precision: 0) %> payable</span>
+    <%= sparkline(@billable_daily) %>
+  </div>
+  <div class="kpi">
+    <span class="kpi-label">Incidents</span>
+    <span class="kpi-value"><%= @alerts.size %></span>
+    <span class="kpi-meta"><%= open_alerts %> still open at end of data</span>
+  </div>
+  <div class="kpi">
+    <span class="kpi-label">Billed above data</span>
+    <span class="kpi-value"><%= number_to_currency(variance, precision: 0) %></span>
+    <span class="kpi-meta"><%= flagged.count { |r| r["decision"] == "dispute" } %> disputes, <%= flagged.count { |r| r["decision"] == "hold" } %> holds</span>
+  </div>
+</div>
+
+<div class="grid-2">
+  <%= card "Acceptance rate by publisher", "Share of received leads accepted, per day" do %>
+    <%= chart_legend(acc_series, kind: :line) %>
+    <%= line_chart(labels: @labels, series: acc_series, format: :pct, y_min: 0.4, y_max: 1.0, title: "Acceptance rate by publisher") %>
+    <%= alert_notes(@alerts, "acceptance_drop") %>
+    <%= chart_table(@labels, acc_series, format: :pct) %>
+  <% end %>
+
+  <%= card "Leads received by publisher", "Leads per day, stacked by source" do %>
+    <% s = series(@publishers, @leads, "received") %>
+    <%= chart_legend(s) %>
+    <%= column_chart(labels: @labels, series: s, title: "Leads received by publisher") %>
+    <%= alert_notes(@alerts, "stall") %>
+    <%= chart_table(@labels, s) %>
+  <% end %>
+
+  <%= card "Week funnel", "#{number_with_delimiter(@funnel_accepted)} accepted leads, by stages reached; conversion from the previous stage" do %>
+    <% prev = @funnel_accepted
+       rows = PipelineRules::STAGES.map do |st|
+         r = { label: st.humanize, value: @funnel[st], note: prev.positive? ? "#{number_to_percentage(100.0 * @funnel[st] / prev, precision: 1)} of previous" : nil }
+         prev = @funnel[st]
+         r
+       end %>
+    <%= hbar_list([{ label: "Accepted", value: @funnel_accepted }] + rows) %>
+    <p class="story">Most leads stop after routing by design; a later stage larger than the one before it means a stage was skipped.</p>
+    <%= alert_notes(@alerts, "broken_sequence") %>
+  <% end %>
+
+  <%= card "Contacted → qualified, by intake center", "Share of contacted leads that reached qualified, by lead's received day" do %>
+    <% s = series(@intakes, @stages, "contacted_to_qualified") %>
+    <%= chart_legend(s, kind: :line) %>
+    <%= line_chart(labels: @labels, series: s, format: :pct, y_max: 0.6, title: "Contacted to qualified rate by intake center") %>
+    <%= alert_notes(@alerts, "conversion_drop") %>
+    <%= chart_table(@labels, s, format: :pct) %>
+  <% end %>
+
+  <%= card "Signed cases delivered by buyer", "Distinct leads, by first delivery date" do %>
+    <% s = series(@buyers, @deliveries, "cases_delivered") %>
+    <%= chart_legend(s) %>
+    <%= column_chart(labels: @labels, series: s, title: "Signed cases delivered by buyer") %>
+    <%= alert_notes(@alerts, "duplicate_delivery") %>
+    <%= chart_table(@labels, s) %>
+  <% end %>
+
+  <%= card "Billable calls by publisher", "Connected and #{PipelineRules::BILLABLE_CALL_SEC}s or longer" do %>
+    <% s = series(@publishers, @calls, "billable") %>
+    <%= chart_legend(s) %>
+    <%= column_chart(labels: @labels, series: s, title: "Billable calls by publisher") %>
+    <%= alert_notes(@alerts, "misrouting") %>
+    <%= chart_table(@labels, s) %>
+  <% end %>
+</div>
+
+<h2>Incidents this week</h2>
+<% if @alerts.empty? %>
+  <div class="card empty">No alerts. Run <code>bin/rails monitor:run</code>.</div>
+<% else %>
+  <div class="card table-card"><%= render "shared/incidents", alerts: @alerts, detail: false %></div>
+<% end %>
+<% end %>
