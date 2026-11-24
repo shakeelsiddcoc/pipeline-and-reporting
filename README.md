@@ -2,30 +2,67 @@
 
 Rails 8 + SQLite. Data: `db/data/*.csv` (copied from `ravlco_pipeline_assignment_data`).
 
+## Prerequisites
+
+- **Ruby 3.3** (tested on 3.3.8, pinned in `.ruby-version`) with Bundler, which ships with Ruby.
+- **A C compiler and the libyaml headers**, for a few gems with native extensions:
+  - macOS: `xcode-select --install`, then `brew install ruby libyaml`
+  - Ubuntu/Debian: `sudo apt install ruby-full build-essential libyaml-dev`
+- **No database server.** SQLite comes precompiled inside the `sqlite3` gem, and the database is rebuilt from `db/data/*.csv`.
+
 ## Run
 
+Three commands produce everything:
+
 ```
-bin/bundle install
-bin/rails db:setup        # create schema + import CSVs
-bin/rails monitor:run report:funnel billing:reconcile   # Parts A, B, C -> out/ (incl. backlog.csv)
-bin/rails test
-bin/rails server     # http://localhost:3000: alerts, /report, /billing
+bin/bundle install                                      # 1. install gems
+bin/rails db:setup                                      # 2. create the SQLite schema and import the CSVs
+bin/rails monitor:run report:funnel billing:reconcile   # 3. Parts A, B, C -> out/
 ```
+
+Optional:
+
+```
+bin/rails test     # 28 tests: the exact incidents, report totals and invoice decisions
+bin/rails server   # the UI at http://localhost:3000
+```
+
+The outputs from step 3 are already committed in `out/` if you want to read them without running anything:
+`alerts.csv` / `alerts.json` and `backlog.csv` (Part A), `funnel_*.csv` (Part B), `reconciliation.csv` (Part C).
 
 ## UI
 
-`bin/rails server` → http://localhost:3000. These are server-rendered pages; the charts are inline SVG drawn in
-`app/helpers/charts_helper.rb`, so there is no JS library or CDN.
+`bin/rails server` → http://localhost:3000. These are server-rendered pages. The charts are inline SVG drawn in
+`app/helpers/charts_helper.rb`, so there's no chart library; the only external request is the IBM Plex font from Google Fonts
+(without it, the pages fall back to the system font).
 
 | Page | What it shows |
 |---|---|
-| **Overview** `/` | Headline KPIs with 7-day trend lines. Six charts: acceptance by publisher, leads received, the week's funnel, contacted→qualified by intake center, cases delivered by buyer, billable calls. Each chart is annotated with the monitor's alert that explains it. Ends with the incident timeline. |
-| **Daily report** `/report/:day` | One day: KPIs with change vs the previous day, that day's funnel, active alerts, and the Part B tables |
-| **Alerts** `/alerts` | Incidents by severity, size of each incident, and the full list with a week timeline and sample IDs |
-| **Billing** `/billing` | Amount billed above the data, approve/dispute/hold totals, $ impact per line, billed vs supported for payables and receivables, and the reconciliation table |
+| **Overview** `/` | A headline sentence about the week, KPI tiles with 7-day trend lines, "What went wrong" incident cards that link to the day each happened, and charts grouped as Acquisition, Funnel, and Revenue & calls. Each chart carries the alert that explains it; points far below their usual level are labelled on the chart. |
+| **Daily report** `/report/:day` | A week strip (volume, acceptance and new alerts per day), KPIs with change vs the previous day, that day's funnel, active alerts, and the Part B tables |
+| **Alerts** `/alerts` | Incidents by severity, size of each incident, the full list with a week timeline and sample IDs, and the unworked backlog |
+| **Billing** `/billing` | Amount billed above the data, approve/dispute/hold totals, $ impact per line, billed vs supported, and the reconciliation table |
 
-Every chart has a legend and a "Show data table" option, plus hover/focus tooltips. Severity and decisions are shown as an icon plus a label,
-never by color alone. The palette was checked for colorblind safety in light and dark mode. Dark mode follows the OS setting.
+Every chart has a legend, a "Show data table" option, and hover/focus tooltips. Severity and decisions are shown as an icon plus a label,
+never by color alone. The palette was checked for colorblind safety in light and dark mode; dark mode follows the OS setting.
+
+### Screenshots
+
+**Overview:** the week in one sentence, then what went wrong
+
+![Overview](docs/screenshots/overview.png)
+
+**Daily report:** Wednesday 10-07, the day P3's consent problem hit
+
+![Daily report](docs/screenshots/daily-report.png)
+
+**Alerts:** every incident with its timeline, plus the backlog of leads still stuck
+
+![Alerts](docs/screenshots/alerts.png)
+
+**Billing:** each invoice line against the data, with a decision
+
+![Billing](docs/screenshots/billing.png)
 
 ## Part A: health monitor
 
