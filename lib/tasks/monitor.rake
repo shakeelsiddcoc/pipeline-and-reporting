@@ -18,5 +18,14 @@ namespace :monitor do
                   a.partner_id, a.ids.size, a.resolved_at ? "→ #{fmt.(a.resolved_at)}" : "open", a.detail)
     end
     puts "#{alerts.size} alerts written to out/alerts.csv and out/alerts.json"
+
+    # Leads still stuck at the end of the data: work to do, not an alert (see Stall).
+    backlog = HealthMonitor::Runner.backlog
+    CSV.open(out.join("backlog.csv"), "w") do |csv|
+      csv << %w[partner_id stuck_before count lead_ids]
+      backlog.each { |f| csv << [f.partner_id, f.key.split(":")[1], f.ids.size, f.ids.join(" ")] }
+    end
+    backlog.each { |f| puts "backlog: #{f.partner_id} #{f.detail}" }
+    puts "#{backlog.sum { |f| f.ids.size }} stuck leads written to out/backlog.csv"
   end
 end

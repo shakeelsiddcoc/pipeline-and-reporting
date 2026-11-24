@@ -62,16 +62,80 @@ class HealthMonitorTest < ActiveSupport::TestCase
     assert_equal({ "misrouting:lead:I1" => ["L1"], "misrouting:call_state_tag:P3" => %w[C2 C3] }, keys)
   end
 
-  test "full week replay finds exactly the known incidents" do
+  test "point-in-time checks only look back, so incidents can resolve; the residue is the backlog" do
+    3.times { |i| lead("L#{i}"); event("L#{i}", "verified", "P1", T0) }
+    assert findings(HealthMonitor::Checks::Stall, T0 + 6.minutes).any?
+    assert_empty findings(HealthMonitor::Checks::Stall, T0 + 2.hours)            # nothing newly stuck
+    assert_equal 3, HealthMonitor::Runner.backlog(T0 + 2.hours).sole.ids.size     # but still unworked
+
+    lead("D1"); event("D1", "delivered", "B1", T0); event("D1", "delivered", "B1", T0 + 1.minute)
+    assert findings(HealthMonitor::Checks::DuplicateDelivery, T0 + 1.hour).any?
+    assert_empty findings(HealthMonitor::Checks::DuplicateDelivery, T0 + 25.hours)
+  end
+
+  test "frozen baseline keeps a long incident open instead of learning it as normal" do
+    60.times { |i| lead("G#{i}", at: T0 - 3.days, accepted: i >= 6, reason: (i < 6 ? "dnc_match" : nil)) }   # 90% normal
+    200.times { |i| lead("S#{i}", at: T0 - 1.day, accepted: i.even?, reason: (i.odd? ? "missing_consent" : nil)) } # long 50% stretch
+    20.times { |i| lead("W#{i}", at: T0 - 1.hour, accepted: i.even?, reason: (i.odd? ? "missing_consent" : nil)) }  # still 50%
+    assert_empty findings(HealthMonitor::Checks::AcceptanceDrop, T0) # rolling baseline has drifted to ~59%
+    frozen = { "acceptance_drop:P1" => T0 - 2.days }                  # baseline from when the incident opened
+    f = HealthMonitor::Checks::AcceptanceDrop.new(T0, frozen: frozen).findings.sole
+    assert_match "normal 90%", f.detail
+    assert_equal 10, f.ids.size # only the missing_consent rejects in the window
+  end
+
+  # A stand-in check that fires on the ticks we choose.
+  class FlappingCheck < HealthMonitor::Check
+    cattr_accessor :fire_at, default: []
+    def findings
+      return [] unless fire_at.include?(at)
+      [finding(key: "x:P1", partner_id: "P1", severity: "high", ids: ["L#{at.to_i}"], confirm: 2,
+               score: fire_at.index(at), detail: "tick #{at.strftime('%H:%M')}")]
+    end
+  end
+
+  test "rate findings confirm on 2 of the last 3 ticks, and the alert keeps the worst tick's detail" do
+    FlappingCheck.fire_at = [T0, T0 + 30.minutes, T0 + 60.minutes].reverse # fires, misses, fires...; worst first
+    alerts = HealthMonitor::Runner.call(from: T0, to: T0 + 3.hours, checks: [FlappingCheck])
+    a = alerts.sole
+    assert_equal T0 + 30.minutes, a.detected_at # 2 of 3, despite never two in a row
+    assert_equal "tick 09:00", a.detail         # highest score was the first tick, not the last one seen (10:00)
+    assert_equal T0 + 2.hours, a.resolved_at
+  end
+
+  test "silence fires when an hour that normally has volume goes quiet, never overnight" do
+    Partner.create!(partner_id: "P1", name: "Pub", partner_type: "publisher") # silence is judged per registered publisher
+    3.times { |d| 8.times { |i| lead("H#{d}#{i}", at: T0 - (d + 1).days - 30.minutes - i.minutes) } } # 8 leads/day at ~08:20-08:30
+    lead("NOW", at: T0 + 3.hours) # data continues later today, so 10:00 is inside the data
+    f = findings(HealthMonitor::Checks::Silence, T0).find { |x| x.key == "silence:leads:P1" }
+    assert_match "averages 8", f.detail
+    lead("ONE", at: T0 - 20.minutes)
+    assert_nil findings(HealthMonitor::Checks::Silence, T0).find { |x| x.key == "silence:leads:P1" }
+    assert_empty findings(HealthMonitor::Checks::Silence, T0.change(hour: 1)) # crosses midnight / no volume
+  end
+
+  test "failed events: three non-success events from one partner in an hour" do
+    3.times { |i| lead("F#{i}"); Event.create!(event_id: "X#{i}", lead_id: "F#{i}", stage: "routed", partner_id: "I1", occurred_at: T0, status: "error") }
+    assert_equal "failed_events:status:I1", findings(HealthMonitor::Checks::FailedEvents, T0 + 5.minutes).sole.key
+    assert_empty findings(HealthMonitor::Checks::FailedEvents, T0 + 2.hours)
+  end
+
+  test "full week replay finds exactly the known incidents, and the finished ones resolve" do
     Importer.call
-    got = HealthMonitor::Runner.call.to_h { |a| [a.incident_key, a.affected_count] }
+    alerts = HealthMonitor::Runner.call.index_by(&:incident_key)
     assert_equal({
       "misrouting:call_state_tag:P3" => 25,
-      "acceptance_drop:P3" => 49,
+      "acceptance_drop:P3" => 46,          # missing_consent only
+      "silence:calls:P1" => 0,             # Wed 08:40-11:10, no P1 calls
       "stall:routed:P2" => 23,
       "duplicate_delivery:delivered:B2" => 5,
       "broken_sequence:no_qualified:I1" => 18,
       "conversion_drop:contacted:I1" => 30
-    }, got)
+    }, alerts.transform_values(&:affected_count))
+    assert_equal Time.utc(2026, 10, 8, 19, 15), alerts["stall:routed:P2"].resolved_at
+    assert alerts["duplicate_delivery:delivered:B2"].resolved_at
+    assert_nil alerts["broken_sequence:no_qualified:I1"].resolved_at # still happening at end of data
+    assert_match "z=12.7", alerts["acceptance_drop:P3"].detail       # worst tick, not the tail
+    assert_equal 23, HealthMonitor::Runner.backlog.sole.ids.size
   end
 end

@@ -1,6 +1,8 @@
 module HealthMonitor
   # Shared rule for "rate moved sharply from its normal level".
   # Baseline = everything before the window, so the monitor learns "normal" as the week goes.
+  # While an incident is open, the runner freezes its baseline where it was when the incident started,
+  # so a long problem can't become the new normal and auto-resolve.
   # Fires only when the window is big enough AND the drop is large AND it is statistically
   # unlikely (one-sided z >= 3, ~0.1% chance per window if nothing changed).
   module RateDrop
@@ -8,7 +10,7 @@ module HealthMonitor
     MIN_BASELINE_N = 50
     MIN_ABS_DROP = 0.20
     MIN_Z = 3.0
-    CONFIRM_TICKS = 2 # must hold for 30 min; a single noisy window never pages anyone
+    CONFIRM_TICKS = 2 # seen in 2 of the last 3 ticks; a single noisy window never pages anyone
 
     def self.drop(n:, hits:, base_n:, base_hits:)
       return if n < MIN_WINDOW_N || base_n < MIN_BASELINE_N

@@ -20,9 +20,30 @@
   </div>
 
   <%= card "Affected leads and calls by incident", "Size of each incident at the end of the replay; the label shows when it was detected", css: "mb" do %>
-    <%= hbar_list(@alerts.sort_by { |a| -a.affected_count }.map { |a|
+    <%= hbar_list(@alerts.select { |a| a.affected_count.positive? }.sort_by { |a| -a.affected_count }.map { |a|
           { label: "#{a.partner_id} #{a.check_name.humanize.downcase}", value: a.affected_count, note: "detected #{a.detected_at.strftime('%a %H:%M')}" } }) %>
   <% end %>
 
   <div class="card table-card"><%= render "shared/incidents", alerts: @alerts, detail: true %></div>
+
+  <div class="chapter"><span class="no">B</span><h2>Unworked backlog</h2>
+    <p>Leads still stuck past an SLA at the end of the data. An incident can be resolved (nothing new is breaking)
+      while its leads still need someone to re-route or deliver them.</p></div>
+  <% if @backlog.blank? %>
+    <div class="card empty">No leads stuck past an SLA.</div>
+  <% else %>
+    <div class="card table-card"><div class="wrap"><table>
+      <thead><tr><th>Partner</th><th>Stuck</th><th class="num">Leads</th><th>Lead IDs</th></tr></thead>
+      <tbody>
+        <% @backlog.each do |f| %>
+          <tr>
+            <td><%= f.partner_id %> <span class="muted"><%= @partners[f.partner_id] %></span></td>
+            <td><%= f.detail.sub(/\A\d+ leads /, "").capitalize %></td>
+            <td class="num"><%= f.ids.size %></td>
+            <td><code><%= f.ids.join(" ") %></code></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table></div></div>
+  <% end %>
 <% end %>

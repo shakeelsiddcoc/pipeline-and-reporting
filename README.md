@@ -7,7 +7,7 @@ Rails 8 + SQLite. Data: `db/data/*.csv` (copied from `ravlco_pipeline_assignment
 ```
 bin/bundle install
 bin/rails db:setup        # create schema + import CSVs
-bin/rails monitor:run report:funnel billing:reconcile   # Parts A, B, C -> out/
+bin/rails monitor:run report:funnel billing:reconcile   # Parts A, B, C -> out/ (incl. backlog.csv)
 bin/rails test
 bin/rails server     # http://localhost:3000: alerts, /report, /billing
 ```
@@ -34,12 +34,18 @@ At each tick every check sees only rows timestamped `<=` that tick, so the detec
 a live monitor would have fired.
 
 **One incident = one alert.** Findings with the same key (check + partner + sub-type) on consecutive ticks
-merge into one alert. The alert's affected count is the union of IDs seen. It resolves after
-1 hour of clean ticks. Rate checks must also hold for 2 consecutive ticks (30 min) before they alert.
-The page at `/` shows the same alerts with a week timeline per incident.
+merge into one alert, and its affected count is the union of IDs seen.
+- **Resolving means "stopped happening".** Every check looks only at recent activity (its own lookback, below). An
+  incident resolves after 1 hour of clean ticks. Leads that are still stuck after the cause has stopped are a
+  separate **backlog** (`out/backlog.csv`, and a card on the Alerts page), because "what still needs work?" is a different
+  question from "is it still breaking?".
+- **Rate checks confirm on 2 of the last 3 ticks**, so a single noisy window never alerts, but a finding that flaps on alternate ticks still does.
+- **Rate baselines freeze while an incident is open**, so a long problem can't become the new normal and close itself.
+- **The detail is the worst tick's**, not the last one's (for P3: 23% acceptance at z = 12.7, not the tail-off at 22:45).
+
 Output columns: `detected_at, check_name, severity, partner_id, affected_count, sample_ids, last_new_at, resolved_at, detail`.
-`last_new_at` is the last tick that added a new affected ID (≈ when the problem stopped growing).
-A blank `resolved_at` means the problem was still visible at the end of the data.
+`last_new_at` is the last tick that added a new affected ID (≈ when the problem stopped growing). A blank
+`resolved_at` means it was still happening when the data ended.
 
 ### Checks and thresholds
 
@@ -47,27 +53,35 @@ The thresholds come from the observed data, not guesses. Normal stage latencies 
 verified→routed ≤ 12 s, routed→contacted ≤ 90 min, contacted→qualified ≤ 40 min, qualified→retainer ≤ 10 min,
 retainer→signed ≤ 10 h, signed→delivered ≤ 6.4 min.
 
-| Check | Fires when | Why this threshold |
-|---|---|---|
-| `stall` | ≥3 accepted leads with no `verified` 5 min after receipt, or no `routed` 5 min after `verified` (per publisher); ≥1 signed lead not delivered after 30 min | The SLA is 1 min; 5 min absorbs ingestion lag. 3 leads separates an outage from one stuck lead. Delivery is $3k each, so 1 is enough. Later stages aren't stall-checked: most leads stop there by design. |
-| `duplicate_delivery` | Any lead with >1 `delivered` event | Every occurrence double-bills a buyer. Critical. |
-| `acceptance_drop` | Publisher acceptance over the last 4 h is ≥20 pp below its own history, z ≥ 3, n ≥ 20, held 30 min | 4 h ≈ 22 leads per publisher. Below n=20, 5 random rejects look like a 25 pp drop (this produced 2 false alarms during tuning). |
-| `conversion_drop` | Intake stage→next-stage-or-later conversion over 12 h is down by the same rule. Each cohort is judged only after ~1.5× the slowest normal transition. | Intake volume is low (2–3 contacts/h). "Or later" means a skipped stage is left to `broken_sequence` and not double-alerted. |
-| `broken_sequence` | A stage exists without the previous one, or a rejected lead has pipeline events (15 min grace for out-of-order events) | Data integrity: any occurrence. |
-| `misrouting` | Lead routed/delivered to a partner not allowed for its state (≥1); calls whose buyer ≠ buyer for the **caller's actual state** (≥2 per publisher), split into `call_state_tag` (bad tag) and `call_router` (good tag, wrong buyer) | A wrong tag that still maps to the right buyer (e.g. TX tagged GA, both B1) is not counted. |
+| Check | Fires when | Lookback | Why this threshold |
+|---|---|---|---|
+| `stall` | ≥3 accepted leads per publisher newly past 5 min without `verified`/`routed`; ≥1 signed lead not delivered after 30 min | 1 h | The SLA is 1 min; 5 min absorbs ingestion lag. 3 leads separates an outage from one stuck lead. Critical at 5+ per hour (≈ all of a publisher's traffic) or for any delivery. Later stages aren't stall-checked: most leads stop there by design. |
+| `duplicate_delivery` | A lead delivered again after its first delivery | 24 h | Every occurrence double-bills a buyer. Critical. Deliveries are sparse, so a shorter lookback would split one incident. |
+| `acceptance_drop` | Publisher acceptance over the last 4 h is ≥20 pp below its baseline, z ≥ 3, n ≥ 20 | 4 h window | 4 h ≈ 22 leads per publisher. Below n=20, 5 random rejects look like a 25 pp drop (this produced 2 false alarms during tuning). Affected IDs are the dominant reject reason only. |
+| `conversion_drop` | Intake stage→next-stage-or-later conversion over 12 h is down by the same rule. Each cohort is judged only after ~1.5× the slowest normal transition. | 12 h window | Intake volume is low (2–3 contacts/h). "Or later" means a skipped stage is left to `broken_sequence` and not double-alerted. |
+| `broken_sequence` | A stage exists without the previous one, or a rejected lead has pipeline events (15 min grace for out-of-order events) | 24 h | Data integrity: any occurrence. I1 sends ~1 retainer every 2 h, so a short lookback would split it. |
+| `misrouting` | Lead routed/delivered to a partner not allowed for its state (≥1); calls whose buyer ≠ buyer for the **caller's actual state** (≥2 per publisher), split into `call_state_tag` (bad tag) and `call_router` (good tag, wrong buyer) | 24 h | A wrong tag that still maps to the right buyer (e.g. TX tagged GA, both B1) is not counted. |
+| `silence` | A publisher's leads or calls are zero for 2 h at a time of day that averaged ≥ 6 on earlier days | 2 h | Rate checks can't see silence: no rows, no rate. Overnight windows never qualify. Not judged past the last row of the export. |
+| `failed_events` | ≥3 leads with a non-`success` event from one partner | 1 h | One failure is a retry; three in an hour is an integration outage. None this week (all 4,830 events are `success`). |
+
+**Checked, nothing found** (so these are known, not missed): call connect rates per publisher per day (0.64–0.89, nothing out of line),
+duplicate leads across publishers by `phone_hash` (none), leads delivered to more than one buyer (none), and
+volume gaps in leads (only overnight). 5 calls have `connected = true` with `duration_sec = 0`: not billable, so no money
+impact, but it's a data quality flag for the call tracker.
 
 ### Result for the week (`out/alerts.csv`)
 
-6 alerts, all real incidents, no false alarms:
+7 alerts, all real, no false alarms:
 
-| Detected | Check | Partner | Affected | Notes |
-|---|---|---|---|---|
-| 10-05 16:30 | misrouting (state tag) | P3 | 25 calls | Ongoing all week, last 10-11 17:45 |
-| 10-07 10:45 | acceptance_drop | P3 | 49 leads | `missing_consent`, resolved 10-08 00:15 |
-| 10-08 14:15 | stall (routed) | P2 | 23 leads | 14:00–17:59 leads never routed |
-| 10-09 02:15 | duplicate_delivery | B2 | 5 leads | $15,000 double-billed |
-| 10-10 08:15 | broken_sequence (no qualified) | I1 | 18 leads | Continues to end of data |
-| 10-10 16:45 | conversion_drop (contacted) | I1 | 30 leads | Same root cause as above, seen from the funnel side |
+| Detected | Check | Partner | Affected | Resolved | Notes |
+|---|---|---|---|---|---|
+| 10-05 16:30 | misrouting (state tag) | P3 | 25 calls | open | Mis-tagged calls all week, last 10-11 17:44 |
+| 10-07 10:30 | acceptance_drop | P3 | 46 leads | 10-08 00:15 | `missing_consent` |
+| 10-07 10:45 | silence (calls) | P1 | — | 10-07 12:00 | No P1 calls 08:40–11:10 (≈7 expected); the only daytime gap this week |
+| 10-08 14:15 | stall (routed) | P2 | 23 leads | 10-08 19:15 | Stopped at 17:19, but all 23 are still unrouted (backlog) |
+| 10-09 02:15 | duplicate_delivery | B2 | 5 leads | 10-10 21:30 | $15,000 double-billed; last repeat 10-09 20:44 |
+| 10-10 08:15 | broken_sequence (no qualified) | I1 | 18 leads | open | Still happening at end of data |
+| 10-10 16:45 | conversion_drop (contacted) | I1 | 30 leads | 10-10 20:45 | Same root cause, seen from the funnel. It resolves because retainers count as "qualified or later"; `broken_sequence` stays open |
 
 ## Part B: daily funnel report
 
@@ -101,7 +115,7 @@ deliveries after the period). If the billed units equal one of these, it is repo
 | INV004 P1 calls | 116 | 116 | 0 | approve | |
 | INV005 P2 calls | 177 | 144 | $1,980 | **dispute** | Counted calls ≥ 60 s; billable is ≥ 90 s |
 | INV006 P3 calls | 146 | 146 | 0 | **hold** | 8 billable calls were mis-tagged to the wrong buyer: approve 138, hold $480 for a policy decision |
-| INV007 B1 cases | 40 | 37 | $9,000 | **hold** | Our invoice: 1 case delivered 10-12 (next period), 2 not in the data |
+| INV007 B1 cases | 40 | 37 | $9,000 | **hold** | 1 case delivered 10-12 (next period). 2 are not in the data at all: the invoice may be wrong **or delivery events were lost** (then we under-bill), so investigate before correcting |
 | INV008 B2 cases | 22 | 16 | $18,000 | **hold** | Our invoice counted delivery events: 5 duplicates + 1 delivered 10-12 |
 | INV009 B3 cases | 18 | 17 | $3,000 | **hold** | Our invoice includes 1 case delivered 10-12 |
 

@@ -20,13 +20,15 @@ class BillingReconciler
       WHERE c.publisher_id = :p AND c.started_at >= :from AND c.started_at < :to
     SQL
     "signed_case" => <<~SQL
-      -- one row per lead delivered to this buyer; its first delivery decides the period
-      WITH d AS (SELECT lead_id, MIN(occurred_at) AS first_at, COUNT(*) AS n
-                 FROM events WHERE stage = 'delivered' AND partner_id = :p GROUP BY lead_id)
-      SELECT SUM(first_at >= :from AND first_at < :to) AS supported,
-             SUM(first_at >= :from) AS incl_after_period,
-             SUM(n) AS delivery_events
-      FROM d
+      -- one row per lead; its FIRST delivery (to any buyer) decides which buyer and which period.
+      -- Filtering by buyer inside the GROUP BY would let a lead delivered to two buyers bill both.
+      -- SQLite: with MIN(), the bare partner_id comes from the row holding the minimum.
+      WITH d AS (SELECT lead_id, partner_id AS buyer_id, MIN(occurred_at) AS first_at, COUNT(*) AS n
+                 FROM events WHERE stage = 'delivered' GROUP BY lead_id)
+      SELECT COALESCE(SUM(first_at >= :from AND first_at < :to), 0) AS supported,
+             COALESCE(SUM(first_at >= :from), 0) AS incl_after_period,
+             COALESCE(SUM(n), 0) AS delivery_events
+      FROM d WHERE buyer_id = :p
     SQL
   }.freeze
 
@@ -73,13 +75,16 @@ class BillingReconciler
     why = cause ? CAUSES[cause] : unexplained(line, stats, diff)
     why = "#{why} (#{diff.abs} #{diff.positive? ? 'over' : 'under'}, $#{(diff * price).abs.to_fs(:delimited)})"
     return ["dispute", "publisher over-billed: #{why}"] if line.direction == "payable" && diff.positive?
-    ["hold", line.direction == "receivable" ? "our invoice is wrong, correct before sending: #{why}" : why]
+    return ["hold", why] unless line.direction == "receivable"
+    ["hold", cause ? "our invoice is wrong, correct before sending: #{why}" : "investigate before sending: #{why}"]
   end
 
   # No single wrong rule matches: explain what part of the gap the data can account for.
   def self.unexplained(line, stats, diff)
     late = stats["incl_after_period"].to_i - (line.units - diff)
     known = late.positive? && diff.positive? ? "#{late} delivered after the period end, " : ""
-    "#{known}#{diff - (known.empty? ? 0 : late)} not found in the data at all"
+    missing = diff - (known.empty? ? 0 : late)
+    "#{known}#{missing} not found in the data at all. Either the invoice is wrong or delivery events were lost " \
+      "(then we under-bill): ask engineering to check delivery logs before correcting"
   end
 end

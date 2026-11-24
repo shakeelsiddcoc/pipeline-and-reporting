@@ -1,10 +1,12 @@
 module HealthMonitor
   # Base for checks. A check sees only data with timestamps <= `at` (no look-ahead).
+  # frozen: { incident_key => baseline_end } for rate incidents that are currently open.
   class Check
-    attr_reader :at
+    attr_reader :at, :frozen
 
-    def initialize(at)
+    def initialize(at, frozen: {})
       @at = at
+      @frozen = frozen
     end
 
     def self.check_name = name.demodulize.underscore
@@ -15,8 +17,10 @@ module HealthMonitor
       ApplicationRecord.connection.select_all(ApplicationRecord.sanitize_sql([query, binds])).to_a
     end
 
+    def full_key(key) = "#{self.class.check_name}:#{key}"
+
     def finding(key:, **attrs)
-      Finding.new(check: self.class.check_name, key: "#{self.class.check_name}:#{key}", **attrs)
+      Finding.new(check: self.class.check_name, key: full_key(key), **attrs)
     end
 
     # Groups [{partner_id:, <id_col>:}] rows into one finding per partner, if the count clears `min`.

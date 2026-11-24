@@ -2,5 +2,6 @@
 class AlertsController < PagesController
   def index
     @alerts = Alert.order(:detected_at)
+    @backlog = HealthMonitor::Runner.backlog if Lead.exists?
   end
 end

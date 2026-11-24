@@ -29,4 +29,12 @@ class BillingReconcilerTest < ActiveSupport::TestCase
     Lead.create!(lead_id: "L2", publisher_id: "P1", received_at: Time.utc(2026, 10, 12, 0, 0), accepted: true)
     assert_equal 1, BillingReconciler.reconcile(line)["supported_units"]
   end
+
+  test "a lead delivered to two buyers is billable only to the first" do
+    Lead.create!(lead_id: "L1", publisher_id: "P1", received_at: Time.utc(2026, 10, 6), accepted: true)
+    Event.create!(event_id: "E1", lead_id: "L1", stage: "delivered", partner_id: "B1", occurred_at: Time.utc(2026, 10, 6, 10))
+    Event.create!(event_id: "E2", lead_id: "L1", stage: "delivered", partner_id: "B2", occurred_at: Time.utc(2026, 10, 6, 11))
+    supported = ->(b) { BillingReconciler.reconcile(line(partner_id: b, direction: "receivable", unit_type: "signed_case", unit_price: 3000, amount: 3000))["supported_units"] }
+    assert_equal [1, 0], [supported.("B1"), supported.("B2")]
+  end
 end

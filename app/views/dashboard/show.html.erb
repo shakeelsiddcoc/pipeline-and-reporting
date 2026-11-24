@@ -67,7 +67,7 @@
       <%= link_to report_path(a.detected_at.to_date.to_s), class: "incident st-#{ChartsHelper::SEVERITY_STATUS[a.severity]}" do %>
         <span class="no"><%= format("%02d", i + 1) %></span>
         <span class="what"><%= a.partner_id %> <%= @partners[a.partner_id] %> · <%= a.check_name.humanize.downcase %></span>
-        <span class="meta"><%= severity_badge(a.severity) %> · <%= a.affected_count %> affected · detected <%= a.detected_at.strftime("%a %H:%M") %> · <%= a.resolved_at ? "resolved #{a.resolved_at.strftime('%a %H:%M')}" : "still open" %></span>
+        <span class="meta"><%= severity_badge(a.severity) %> · <%= a.affected_count.zero? ? "no IDs" : "#{a.affected_count} affected" %> · detected <%= a.detected_at.strftime("%a %H:%M") %> · <%= a.resolved_at ? "resolved #{a.resolved_at.strftime('%a %H:%M')}" : "still open" %></span>
         <span class="meta"><%= a.detail %></span>
       <% end %>
     <% end %>
@@ -132,7 +132,7 @@
     <% s = series(@publishers, @calls, "billable") %>
     <%= chart_legend(s) %>
     <%= column_chart(labels: @labels, series: s, title: "Billable calls by publisher") %>
-    <%= alert_notes(@alerts, "misrouting") %>
+    <%= alert_notes(@alerts, "misrouting", "silence") %>
     <%= chart_table(@labels, s) %>
   <% end %>
 </div>

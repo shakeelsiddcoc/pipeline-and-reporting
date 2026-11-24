@@ -14,14 +14,14 @@
     ],
     "last_new_at": "2026-10-11 17:45",
     "resolved_at": null,
-    "detail": "25 calls tagged with the wrong state and sent to the wrong buyer"
+    "detail": "7 calls in 24h tagged with the wrong state and sent to the wrong buyer"
   },
   {
-    "detected_at": "2026-10-07 10:45",
+    "detected_at": "2026-10-07 10:30",
     "check_name": "acceptance_drop",
     "severity": "high",
     "partner_id": "P3",
-    "affected_count": 49,
+    "affected_count": 46,
     "sample_ids": [
       "L000875",
       "L000861",
@@ -31,7 +31,20 @@
     ],
     "last_new_at": "2026-10-07 22:45",
     "resolved_at": "2026-10-08 00:15",
-    "detail": "acceptance 33% over last 21 (normal 81%, z=5.6); top reject reason missing_consent (14)"
+    "detail": "acceptance 23% over last 26 (normal 92%, z=12.7); top reject reason missing_consent (19)"
+  },
+  {
+    "detected_at": "2026-10-07 10:45",
+    "check_name": "silence",
+    "severity": "high",
+    "partner_id": "P1",
+    "affected_count": 0,
+    "sample_ids": [
+
+    ],
+    "last_new_at": "2026-10-07 11:00",
+    "resolved_at": "2026-10-07 12:00",
+    "detail": "no calls in the last 2 h (this time of day averages 7)"
   },
   {
     "detected_at": "2026-10-08 14:15",
@@ -47,8 +60,8 @@
       "L001120"
     ],
     "last_new_at": "2026-10-08 17:30",
-    "resolved_at": null,
-    "detail": "23 leads verified > 5 minutes ago with no routed event"
+    "resolved_at": "2026-10-08 19:15",
+    "detail": "8 leads verified > 5 minutes ago with no routed event"
   },
   {
     "detected_at": "2026-10-09 02:15",
@@ -64,8 +77,8 @@
       "L001243"
     ],
     "last_new_at": "2026-10-09 20:45",
-    "resolved_at": null,
-    "detail": "5 leads delivered more than once (5 extra deliveries, $15000 at risk)"
+    "resolved_at": "2026-10-10 21:30",
+    "detail": "5 leads delivered again (5 repeat deliveries in 24h, $15,000 at risk)"
   },
   {
     "detected_at": "2026-10-10 08:15",
@@ -82,7 +95,7 @@
     ],
     "last_new_at": "2026-10-12 00:45",
     "resolved_at": null,
-    "detail": "18 leads skipped the qualified stage"
+    "detail": "14 leads skipped the qualified stage"
   },
   {
     "detected_at": "2026-10-10 16:45",
@@ -99,6 +112,6 @@
     ],
     "last_new_at": "2026-10-10 19:15",
     "resolved_at": "2026-10-10 20:45",
-    "detail": "contacted -> qualified+ conversion 9% over last 33 (normal 35%, z=3.1)"
+    "detail": "contacted -> qualified+ conversion 6% over last 32 (normal 35%, z=3.4)"
   }
 ]

@@ -11,7 +11,7 @@ class DashboardControllerTest < ActionDispatch::IntegrationTest
     assert_select ".hbars", 1
     assert_select "details.tableview", 5
     assert_select ".hit[data-tip]", minimum: 35     # one hover band per day per chart
-    assert_select ".story li", 6                     # every incident annotates a chart
+    assert_select ".story li", 7                     # every incident annotates a chart
   end
 
   test "empty database" do

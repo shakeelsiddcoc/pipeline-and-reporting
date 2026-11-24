@@ -28,10 +28,18 @@ module HealthMonitor
             GROUP BY partner_id
           SQL
           stats.filter_map do |s|
-            d = RateDrop.drop(n: s["n"], hits: s["hits"], base_n: s["base_n"], base_hits: s["base_hits"])
+            key = "#{tr[:from]}:#{s['partner_id']}"
+            bs = frozen[full_key(key)]
+            s = s.merge(rows(<<~SQL, from: tr[:from], later: later, p: s["partner_id"], bs: bs, at: at).first) if bs
+              SELECT COUNT(*) AS base_n,
+                     SUM(EXISTS (SELECT 1 FROM events b WHERE b.lead_id = a.lead_id AND b.stage IN (:later)
+                                 AND b.occurred_at <= :at)) AS base_hits
+              FROM events a WHERE a.stage = :from AND a.partner_id = :p AND a.occurred_at <= :bs
+            SQL
+            d = RateDrop.drop(n: s["n"], hits: s["hits"], base_n: s["base_n"].to_i, base_hits: s["base_hits"].to_i)
             next unless d
-            finding(key: "#{tr[:from]}:#{s['partner_id']}", partner_id: s["partner_id"], severity: "high", confirm: RateDrop::CONFIRM_TICKS,
-                    ids: s["lost"].to_s.split(","),
+            finding(key: key, partner_id: s["partner_id"], severity: "high", confirm: RateDrop::CONFIRM_TICKS,
+                    ids: s["lost"].to_s.split(","), score: d[:base] - d[:rate], baseline_end: bs || we - WINDOW,
                     detail: RateDrop.describe("#{tr[:from]} -> #{later.first}+ conversion", s["n"], d))
           end
         end

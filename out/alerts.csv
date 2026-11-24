@@ -1,7 +1,8 @@
 detected_at,check_name,severity,partner_id,affected_count,sample_ids,last_new_at,resolved_at,detail
-2026-10-05 16:30,misrouting,medium,P3,25,C00105 C00118 C00228 C00254 C00236,2026-10-11 17:45,,25 calls tagged with the wrong state and sent to the wrong buyer
-2026-10-07 10:45,acceptance_drop,high,P3,49,L000875 L000861 L000883 L000911 L000869,2026-10-07 22:45,2026-10-08 00:15,"acceptance 33% over last 21 (normal 81%, z=5.6); top reject reason missing_consent (14)"
-2026-10-08 14:15,stall,critical,P2,23,L001079 L001094 L001119 L001044 L001120,2026-10-08 17:30,,23 leads verified > 5 minutes ago with no routed event
-2026-10-09 02:15,duplicate_delivery,critical,B2,5,L000979 L000999 L001499 L001305 L001243,2026-10-09 20:45,,"5 leads delivered more than once (5 extra deliveries, $15000 at risk)"
-2026-10-10 08:15,broken_sequence,high,I1,18,L001643 L001789 L001569 L001560 L001729,2026-10-12 00:45,,18 leads skipped the qualified stage
-2026-10-10 16:45,conversion_drop,high,I1,30,L001695 L001609 L001748 L001778 L001555,2026-10-10 19:15,2026-10-10 20:45,"contacted -> qualified+ conversion 9% over last 33 (normal 35%, z=3.1)"
+2026-10-05 16:30,misrouting,medium,P3,25,C00105 C00118 C00228 C00254 C00236,2026-10-11 17:45,,7 calls in 24h tagged with the wrong state and sent to the wrong buyer
+2026-10-07 10:30,acceptance_drop,high,P3,46,L000875 L000861 L000883 L000911 L000869,2026-10-07 22:45,2026-10-08 00:15,"acceptance 23% over last 26 (normal 92%, z=12.7); top reject reason missing_consent (19)"
+2026-10-07 10:45,silence,high,P1,0,"",2026-10-07 11:00,2026-10-07 12:00,no calls in the last 2 h (this time of day averages 7)
+2026-10-08 14:15,stall,critical,P2,23,L001079 L001094 L001119 L001044 L001120,2026-10-08 17:30,2026-10-08 19:15,8 leads verified > 5 minutes ago with no routed event
+2026-10-09 02:15,duplicate_delivery,critical,B2,5,L000979 L000999 L001499 L001305 L001243,2026-10-09 20:45,2026-10-10 21:30,"5 leads delivered again (5 repeat deliveries in 24h, $15,000 at risk)"
+2026-10-10 08:15,broken_sequence,high,I1,18,L001643 L001789 L001569 L001560 L001729,2026-10-12 00:45,,14 leads skipped the qualified stage
+2026-10-10 16:45,conversion_drop,high,I1,30,L001695 L001609 L001748 L001778 L001555,2026-10-10 19:15,2026-10-10 20:45,"contacted -> qualified+ conversion 6% over last 32 (normal 35%, z=3.4)"

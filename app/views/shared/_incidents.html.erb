@@ -17,7 +17,7 @@
         <td><%= severity_badge(a.severity) %></td>
         <td><%= a.check_name.humanize %></td>
         <td><%= a.partner_id %> <span class="muted"><%= @partners[a.partner_id] %></span></td>
-        <td class="num"><%= a.affected_count %></td>
+        <td class="num"><%= a.affected_count.zero? ? "—" : a.affected_count %></td><%# silence has no IDs to count %>
         <td><div class="tl" role="img" aria-label="active from <%= a.detected_at.strftime('%a %H:%M') %> to <%= a.resolved_at&.strftime('%a %H:%M') || 'end of data' %>">
           <span class="st-<%= ChartsHelper::SEVERITY_STATUS[a.severity] %>" style="left:<%= from.round(2) %>%; width:<%= (to - from).round(2) %>%"></span></div></td>
         <td class="num"><%= a.resolved_at ? a.resolved_at.strftime("%a %m-%d %H:%M") : "Open" %></td>
