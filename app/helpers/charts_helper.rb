@@ -82,7 +82,20 @@ module ChartsHelper
   end
 
   # Multi-series line chart with a per-X hover band (crosshair + every series in one tooltip).
-  def line_chart(labels:, series:, title:, format: :int, y_min: 0, y_max: nil, height: 230)
+  # Points that sit far below their own series' median, as chart notes: [{series:, at:, text:}].
+  # Data-driven, so a normal week draws no notes. Only the first of a run of lows is labeled.
+  def outlier_notes(series, format:, drop:)
+    series.each_with_index.filter_map do |s, si|
+      vals = s[:values].compact
+      next if vals.size < 3
+      median = vals.sort[vals.size / 2]
+      low = s[:values].each_with_index.select { |v, _| v && median - v >= drop }.min_by { |v, i| [v, i] }
+      next unless low
+      { series: si, at: low[1], text: "#{s[:name].split.first} #{fmt_tick(low[0], format)} (normal #{fmt_tick(median, format)})" }
+    end
+  end
+
+  def line_chart(labels:, series:, title:, format: :int, y_min: 0, y_max: nil, height: 230, notes: [])
     pw, ph = plot_size(height)
     y_max ||= nice_ceiling(series.flat_map { |s| s[:values] }.compact.max)
     xs = labels.each_index.map { |i| PAD[:l] + (labels.size > 1 ? pw * i / (labels.size - 1.0) : pw / 2.0) }
@@ -92,6 +105,18 @@ module ChartsHelper
       pts = s[:values].each_with_index.filter_map { |v, i| [xs[i].round(1), yv.(v)] if v }
       parts << tag.polyline(points: pts.map { |p| p.join(",") }.join(" "), class: "ln s#{s[:slot]}")
       pts.each { |x, y| parts << tag.circle(cx: x, cy: y, r: 4, class: "dot s#{s[:slot]}") }
+    end
+    notes.each do |n|
+      v = series[n[:series]][:values][n[:at]]
+      next unless v
+      px, py = xs[n[:at]], yv.(v)
+      w = n[:text].length * 6.3 + 14 # shortcut: estimated text width (11px Plex), fine for short notes
+      lx = (px - w / 2).clamp(PAD[:l], CHART_W - PAD[:r] - w)
+      ly = py > PAD[:t] + ph / 2 ? py - 40 : py + 18 # label above low points, below high ones
+      parts << tag.circle(cx: px.round(1), cy: py, r: 8, class: "note-ring") +
+               tag.line(x1: px.round(1), y1: (ly > py ? py + 8 : py - 8).round(1), x2: px.round(1), y2: (ly > py ? ly : ly + 22).round(1), class: "note-lead") +
+               tag.rect(x: lx.round(1), y: ly.round(1), width: w.round(1), height: 22, rx: 11, class: "note-bg") +
+               tag.text(n[:text], x: (lx + w / 2).round(1), y: (ly + 15).round(1), class: "note-text", "text-anchor": "middle")
     end
     band = pw / [labels.size - 1, 1].max.to_f
     labels.each_with_index do |label, i|

@@ -1,11 +1,10 @@
 <% content_for :title, "Pipeline Health Alerts" %>
-<div class="page-head">
-  <div>
-    <h1>Health alerts</h1>
-    <p class="lede">The week replayed on a 15-minute clock. Each row is one incident: repeats of the same problem merge into it,
-      and it resolves after an hour with no new findings. Regenerate with <code>bin/rails monitor:run</code>.</p>
-  </div>
-</div>
+<% content_for :masthead do %>
+  <p class="eyebrow">Part A · Health monitor</p>
+  <h1>Health alerts</h1>
+  <p class="lede">The week replayed on a 15-minute clock. Each row is one incident: repeats of the same problem merge into it,
+    and it resolves after an hour with no new findings. Regenerate with <code>bin/rails monitor:run</code>.</p>
+<% end %>
 
 <% if @alerts.empty? %>
   <div class="card empty">No alerts yet. Run <code>bin/rails db:setup</code> and <code>bin/rails monitor:run</code>.</div>

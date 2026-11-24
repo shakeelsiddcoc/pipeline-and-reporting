@@ -1,12 +1,11 @@
 <% content_for :title, "Billing Reconciliation" %>
 <% money = ->(v) { number_to_currency(v, precision: 0) } %>
-<div class="page-head">
-  <div>
-    <h1>Billing reconciliation</h1>
-    <p class="lede">Each line of <code>billing.csv</code> compared with what the data supports for the same partner and period.
-      Impact = (billed − supported) × unit price; positive means billed above the data. CSV: <code>bin/rails billing:reconcile</code></p>
-  </div>
-</div>
+<% content_for :masthead do %>
+  <p class="eyebrow">Part C · Billing reconciliation</p>
+  <h1>Billing reconciliation</h1>
+  <p class="lede">Each line of <code>billing.csv</code> compared with what the data supports for the same partner and period.
+    Impact = (billed − supported) × unit price; positive means billed above the data. CSV: <code>bin/rails billing:reconcile</code></p>
+<% end %>
 
 <% if @rows.empty? %>
   <div class="card empty">No billing data. Run <code>bin/rails db:setup</code>.</div>

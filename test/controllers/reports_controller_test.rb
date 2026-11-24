@@ -5,7 +5,7 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     Importer.call
     get report_path("2026-10-07")
     assert_response :success
-    assert_select ".tabs a[aria-current]", text: "Wed Oct 7"
+    assert_select ".wday[aria-current] .wname", text: "Wed 7"
     assert_select "h2", count: 4
     assert_select ".kpi", 6
     assert_select ".delta.bad", minimum: 1 # Wed: P3 consent drop pulls acceptance down vs Tue

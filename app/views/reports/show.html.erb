@@ -9,19 +9,25 @@
   stages = PipelineRules::STAGES
   total = ->(sections, name) { sections[name]&.find { |r| r["partner_id"] == "ALL" } || {} }
 %>
-<div class="page-head">
-  <div>
-    <h1>Daily report<% if @day %> · <%= Date.parse(@day).strftime("%A, %b %-d") %><% end %></h1>
-    <p class="lede">Leads and the funnel are grouped by the day the lead was received; deliveries and calls by the day they happened.
-      CSV: <code>bin/rails report:funnel</code> · SQL: <code>app/queries/funnel/*.sql</code></p>
-  </div>
-</div>
+<% content_for :masthead do %>
+  <p class="eyebrow">Part B · Daily funnel report</p>
+  <h1><%= @day ? Date.parse(@day).strftime("%A, %B %-d") : "Daily report" %></h1>
+  <p class="lede">Leads and the funnel are grouped by the day the lead was received; deliveries and calls by the day they happened.
+    CSV: <code>bin/rails report:funnel</code> · SQL: <code>app/queries/funnel/*.sql</code></p>
+<% end %>
 
-<div class="tabs" style="margin-bottom:20px">
-  <% @days.each do |d| %>
-    <%= link_to Date.parse(d).strftime("%a %b %-d"), report_path(d), "aria-current": (d == @day ? "page" : nil) %>
+<nav class="weekstrip" aria-label="Days">
+  <% max_received = @strip.map { |d| d[:received].to_i }.max.to_i %>
+  <% @strip.each do |d| %>
+    <%= link_to report_path(d[:day]), class: "wday", "aria-current": (d[:day] == @day ? "page" : nil) do %>
+      <span class="wname"><%= Date.parse(d[:day]).strftime("%a %-d") %></span>
+      <span class="wnum"><%= d[:received] ? number_with_delimiter(d[:received]) : "—" %></span>
+      <span class="wmeta"><%= d[:received] ? "leads · #{number_to_percentage(d[:acceptance] * 100, precision: 0)} accepted" : "deliveries only" %></span>
+      <span class="wbar" aria-hidden="true"><span style="width:<%= max_received.positive? ? (100.0 * d[:received].to_i / max_received).round(1) : 0 %>%"></span></span>
+      <span class="wmeta"><%= d[:new_alerts].any? ? safe_join(d[:new_alerts].map { |sev| severity_badge(sev) }, " ") : "no new alerts" %></span>
+    <% end %>
   <% end %>
-</div>
+</nav>
 
 <% if @day.nil? %>
   <div class="card empty">No data loaded. Run <code>bin/rails db:setup</code>.</div>
